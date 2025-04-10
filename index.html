@@ -7,6 +7,18 @@
     <title>Vite App</title>
   </head>
   <body>
+    <div id="crosshair-lines">
+      <span class="line horizontal"></span>
+      <span class="line vertical"></span>
+    </div>
+    <div id="overlay">
+      <div >
+        <h1>Explorer</h1>
+        <p>loading...<span id="percent">0</span>%</p>
+        <p>Click markers to move</p>
+        <button id="enterButton">Enter</button>
+      </div>
+    </div>
     <div id="app"></div>
     <script type="module" src="/src/main.js"></script>
   </body>

@@ -9,4 +9,60 @@ html {
   margin: 0;
   padding: 0;
   overflow: hidden;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+#crosshair-lines {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 9999;
+  display: none;
+}
+
+.line {
+  position: absolute;
+  background-color: white;
+}
+
+.horizontal {
+  width: 20px;
+  height: 1px;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+}
+
+.vertical {
+  height: 20px;
+  width: 1px;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+#overlay{
+  height:100%;
+  display: flex;
+  align-content: center;
+  justify-content: center;
+  align-items: center;
+
+}
+
+#overlay div{
+  background-color: lightslategray;
+  border-radius: 2em;
+  padding:2em;
+}
+
+#enterButton{
+  display:none;
+  padding: 10px;
+  border-radius: 10px;
+  font-size:2em;
 }
