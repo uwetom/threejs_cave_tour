@@ -150,7 +150,7 @@ function animate() {
 // Load a map
 loader.load(
   // resource URL
-  "src/models/kannonzaki_battery_historic_site.glb",
+  "/models/kannonzaki_battery_historic_site.glb",
   // called when the resource is loaded
   function (gltf) {
     scene.add(gltf.scene);
@@ -173,7 +173,7 @@ loader.load(
 // Load a pointer
 loader.load(
   // resource URL
-  "src/models/map_pointer_3d_icon.glb",
+  "/models/map_pointer_3d_icon.glb",
   // called when the resource is loaded
   function (gltf) {
     for (let i = 0; i < pointers.length; i++) {
@@ -199,7 +199,7 @@ loader.load(
 );
 
 //load skydome
-Txloader.load('src/hdris/sky.hdr', function(hdrTexture) {
+Txloader.load('/hdris/sky.hdr', function(hdrTexture) {
   
   const envMap = pmremGenerator.fromEquirectangular(hdrTexture).texture;
 
