@@ -6,7 +6,7 @@ import { gsap } from "gsap";
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 
 let controls, scene, camera;
-let renderer = new THREE.WebGLRenderer();
+let renderer = new THREE.WebGLRenderer({ antialias: true });
 let loader = new GLTFLoader();
 let loadedAmount = 0;
 let mapLoaded = false;
@@ -50,6 +50,10 @@ const mouse = new THREE.Vector2(0, 0);
 const Txloader = new RGBELoader();
 
 let pmremGenerator;
+
+const MAP_MODEL_URL = "./models/environment.gltf";
+const POINTER_MODEL_URL = "./models/map_pointer_3d_icon.glb";
+const SKY_HDR_URL = "./hdris/sky.hdr";
 
 function setOverlayReadyState() {
   const loadingLabel = document.querySelector(".overlay-loading-label");
@@ -95,8 +99,12 @@ function init() {
   pitch = Math.asin(THREE.MathUtils.clamp(forward.y, -1, 1));
 
   //initialise render
-  renderer = new THREE.WebGLRenderer();
+  renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.NoToneMapping;
+  renderer.toneMappingExposure = 1;
   renderer.domElement.style.touchAction = "none";
   document.body.appendChild(renderer.domElement);
 
@@ -106,7 +114,7 @@ function init() {
 
   //add lights
   const light = new THREE.AmbientLight(0x404040); // soft white light
-  light.intensity= 10;
+  light.intensity= 1.2;
   scene.add(light);
 
   //initialise controls
@@ -119,6 +127,48 @@ function init() {
   window.addEventListener("resize", onWindowResize);
 
  
+}
+
+function optimizeModelTextures(root) {
+  const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+
+  root.traverse((object3d) => {
+    if (!object3d.isMesh) {
+      return;
+    }
+
+    const materials = Array.isArray(object3d.material)
+      ? object3d.material
+      : [object3d.material];
+
+    materials.forEach((material) => {
+      if (!material) {
+        return;
+      }
+
+      const maps = [
+        material.map,
+        material.emissiveMap,
+        material.normalMap,
+        material.roughnessMap,
+        material.metalnessMap,
+        material.aoMap,
+      ];
+
+      maps.forEach((texture) => {
+        if (!texture) {
+          return;
+        }
+
+        texture.anisotropy = maxAnisotropy;
+        texture.minFilter = THREE.LinearMipmapLinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+        texture.needsUpdate = true;
+      });
+
+      material.needsUpdate = true;
+    });
+  });
 }
 
 //called on loop
@@ -178,9 +228,10 @@ function animate() {
 // Load a map
 loader.load(
   // resource URL
-  "/models/kannonzaki_battery_historic_site.glb",
+  MAP_MODEL_URL,
   // called when the resource is loaded
   function (gltf) {
+    optimizeModelTextures(gltf.scene);
     scene.add(gltf.scene);
 
     mapLoaded = true;
@@ -208,7 +259,7 @@ loader.load(
 // Load a pointer
 loader.load(
   // resource URL
-  "/models/map_pointer_3d_icon.glb",
+  POINTER_MODEL_URL,
   // called when the resource is loaded
   function (gltf) {
     for (let i = 0; i < pointers.length; i++) {
@@ -234,12 +285,13 @@ loader.load(
 );
 
 //load skydome
-Txloader.load('/hdris/sky.hdr', function(hdrTexture) {
+Txloader.load(SKY_HDR_URL, function(hdrTexture) {
   
   const envMap = pmremGenerator.fromEquirectangular(hdrTexture).texture;
 
   scene.background = envMap;     // Set as skybox
   scene.environment = envMap;   // Use as environment lighting
+  scene.backgroundIntensity = 0.6;
 
   hdrTexture.dispose();         // Clean up
   pmremGenerator.dispose();
@@ -411,6 +463,7 @@ function onWindowResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 
 }
 
