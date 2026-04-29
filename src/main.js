@@ -10,6 +10,28 @@ let renderer = new THREE.WebGLRenderer({ antialias: true });
 let loader = new GLTFLoader();
 let loadedAmount = 0;
 let mapLoaded = false;
+let progressTimer = null;
+
+function startFakeProgress() {
+  progressTimer = setInterval(() => {
+    if (loadedAmount < 92) {
+      // Ease toward 92% — slows as it approaches
+      loadedAmount += Math.max(0.3, (92 - loadedAmount) * 0.018);
+      loadedAmount = Math.min(92, loadedAmount);
+      const percentEl = document.getElementById("percent");
+      if (percentEl) {
+        percentEl.innerHTML = Math.floor(loadedAmount);
+      }
+    }
+  }, 250);
+}
+
+function stopFakeProgress() {
+  if (progressTimer) {
+    clearInterval(progressTimer);
+    progressTimer = null;
+  }
+}
 
 // navigation points
 let pointers = [
@@ -219,11 +241,10 @@ function animate() {
 
     renderer.render(scene, camera);
 
-  } else {
-  
-    document.getElementById("percent").innerHTML = loadedAmount;
   }
 }
+
+startFakeProgress();
 
 // Load a map
 loader.load(
@@ -231,6 +252,7 @@ loader.load(
   MAP_MODEL_URL,
   // called when the resource is loaded
   function (gltf) {
+    stopFakeProgress();
     optimizeModelTextures(gltf.scene);
     scene.add(gltf.scene);
 
@@ -240,19 +262,13 @@ loader.load(
     setOverlayReadyState();
 
     document.getElementById("enterButton").style.display= "block";
-
-
   },
-  // called while loading is progressing
-  function (xhr) {
-    if (xhr.total > 0) {
-      loadedAmount = Math.min(99, Math.ceil((xhr.loaded / xhr.total) * 100));
-      document.getElementById("percent").innerHTML = loadedAmount;
-    }
-  },
+  // called while loading is progressing — only fires for the small .gltf JSON, ignored
+  function (xhr) {},
   // called when loading has errors
   function (error) {
     console.log("An error happened");
+    stopFakeProgress();
   }
 );
 
