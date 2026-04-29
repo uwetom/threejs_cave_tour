@@ -5,6 +5,8 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Vite App</title>
+    <script type="module" crossorigin src="./assets/index-CI5_UHrD.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-Du_jh2up.css">
   </head>
   <body>
     <div id="crosshair-lines">
@@ -12,14 +14,17 @@
       <span class="line vertical"></span>
     </div>
     <div id="overlay">
-      <div >
-        <h1>Cave Explorer</h1>
-        <p>loading...<span id="percent">0</span>%</p>
-        <p>Click markers to move</p>
+      <div class="overlay-card">
+        <p class="overlay-kicker">Three.js Cave Tour</p>
+        <h1>Explorer</h1>
+        <p class="overlay-loading-label">Loading scan data <span id="percent">0</span>%</p>
+        <div class="overlay-progress-track" aria-hidden="true">
+          <span class="overlay-progress-fill"></span>
+        </div>
+        <p class="overlay-hint">Click or tap markers to move</p>
         <button id="enterButton">Enter</button>
       </div>
     </div>
     <div id="app"></div>
-    <script type="module" src="/src/main.js"></script>
   </body>
 </html>

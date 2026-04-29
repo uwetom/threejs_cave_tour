@@ -9,6 +9,7 @@ let controls, scene, camera;
 let renderer = new THREE.WebGLRenderer();
 let loader = new GLTFLoader();
 let loadedAmount = 0;
+let mapLoaded = false;
 
 // navigation points
 let pointers = [
@@ -24,8 +25,24 @@ const clock = new THREE.Clock();
 let targetTime = 0;
 let framerate = 25;
 
-let mouseDown = false; // is the mouse pressed down
+const hasFinePointer = window.matchMedia("(any-pointer: fine)").matches;
+const hasTouchInput = navigator.maxTouchPoints > 0 || "ontouchstart" in window;
+const isTouchDevice = !hasFinePointer && hasTouchInput;
+
+let interactionDown = false;
 let moving = false; // is the camera moving between navigation points
+let touchLookEnabled = false;
+let touchDragging = false;
+let touchStartX = 0;
+let touchStartY = 0;
+let lastTouchX = 0;
+let lastTouchY = 0;
+let yaw = 0;
+let pitch = 0;
+
+const touchLookSensitivity = 0.003;
+const maxPitch = Math.PI / 2 - 0.1;
+const tapThresholdPx = 10;
 
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2(0, 0); 
@@ -33,6 +50,24 @@ const mouse = new THREE.Vector2(0, 0);
 const Txloader = new RGBELoader();
 
 let pmremGenerator;
+
+function setOverlayReadyState() {
+  const loadingLabel = document.querySelector(".overlay-loading-label");
+  const progressTrack = document.querySelector(".overlay-progress-track");
+  const hint = document.querySelector(".overlay-hint");
+
+  if (loadingLabel) {
+    loadingLabel.textContent = "Scan data ready";
+  }
+
+  if (progressTrack) {
+    progressTrack.style.display = "none";
+  }
+
+  if (hint) {
+    hint.textContent = "Press Enter to begin";
+  }
+}
 
 function init() {
 
@@ -54,9 +89,15 @@ function init() {
   camera.position.set(pointers[0].x, pointers[0].y, pointers[0].z);
   camera.lookAt(0, 0, 0);
 
+  const forward = new THREE.Vector3();
+  camera.getWorldDirection(forward);
+  yaw = Math.atan2(forward.x, forward.z);
+  pitch = Math.asin(THREE.MathUtils.clamp(forward.y, -1, 1));
+
   //initialise render
   renderer = new THREE.WebGLRenderer();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.domElement.style.touchAction = "none";
   document.body.appendChild(renderer.domElement);
 
   pmremGenerator = new THREE.PMREMGenerator(renderer);  
@@ -69,7 +110,13 @@ function init() {
   scene.add(light);
 
   //initialise controls
-  controls = new PointerLockControls(camera, document.body);
+  if (!isTouchDevice) {
+    controls = new PointerLockControls(camera, document.body);
+  } else {
+    setupTouchControls();
+  }
+
+  window.addEventListener("resize", onWindowResize);
 
  
 }
@@ -79,9 +126,15 @@ function animate() {
   requestAnimationFrame(animate);
 
   //check if main model environment has loaded
-  if (loadedAmount == 100) {
+  if (mapLoaded) {
     // required if controls.enableDamping or controls.autoRotate are set to true
-    controls.update();
+    if (controls) {
+      controls.update();
+    }
+
+    if (isTouchDevice && touchLookEnabled) {
+      applyTouchLook();
+    }
 
     //only update at a set framerate
     if (clock.getElapsedTime() >= targetTime) {
@@ -106,36 +159,11 @@ function animate() {
       }
     }
 
-    // Update raycaster from camera through center of screen
-    raycaster.setFromCamera(mouse, camera);
-    raycaster.layers.enable(0); // Only raycast layer 0
-    const intersects = raycaster.intersectObjects(scene.children, true);
+    if (!isTouchDevice) {
+      const pointerHit = getPointerAtNdc(mouse);
 
-    if (intersects.length > 0) {
-      const firstHit = intersects[0].object;
-
-      if (firstHit.name == "pointer") {
-        if (mouseDown && !moving) {
-          moving = true; // dont check for raycast hits when camera is moving
-          const hitPos = firstHit.parent.parent.parent.position;
-          
-      
-          gsap.to(camera.position, {
-            duration: 5, // time in seconds
-            x: hitPos.x,
-            y: hitPos.y + 0.5,
-            z: hitPos.z,
-            onComplete: () => {
-              moving = false;
-            },
-            ease: "power1.inOut",
-          });
-        }else if(!moving){
-          
-          //hover effect
-
-
-        }
+      if (pointerHit && interactionDown && !moving) {
+        moveCameraToPointer(pointerHit);
       }
     }
 
@@ -155,6 +183,10 @@ loader.load(
   function (gltf) {
     scene.add(gltf.scene);
 
+    mapLoaded = true;
+    loadedAmount = 100;
+    document.getElementById("percent").innerHTML = loadedAmount;
+    setOverlayReadyState();
 
     document.getElementById("enterButton").style.display= "block";
 
@@ -162,7 +194,10 @@ loader.load(
   },
   // called while loading is progressing
   function (xhr) {
-    loadedAmount = Math.ceil((xhr.loaded / xhr.total) * 100);
+    if (xhr.total > 0) {
+      loadedAmount = Math.min(99, Math.ceil((xhr.loaded / xhr.total) * 100));
+      document.getElementById("percent").innerHTML = loadedAmount;
+    }
   },
   // called when loading has errors
   function (error) {
@@ -213,11 +248,15 @@ Txloader.load('/hdris/sky.hdr', function(hdrTexture) {
 
 
 document.addEventListener("mousedown", () => {
-  mouseDown = true;
+  if (!isTouchDevice) {
+    interactionDown = true;
+  }
 });
 
 document.addEventListener("mouseup", () => {
-  mouseDown = false;
+  if (!isTouchDevice) {
+    interactionDown = false;
+  }
 });
 
 
@@ -231,9 +270,147 @@ function enterScan(){
 function hideOverlay()
 {
  document.getElementById("overlay").remove();
-  //lock the controls when you first click on the screen
-document.getElementById("crosshair-lines").style.display="block";
-  controls.lock();
+  if (!isTouchDevice) {
+    //lock the controls when you first click on the screen
+    document.getElementById("crosshair-lines").style.display="block";
+    controls.lock();
+  } else {
+    touchLookEnabled = true;
+    document.getElementById("crosshair-lines").style.display = "none";
+  }
+
+}
+
+function getPointerAtNdc(ndc) {
+  raycaster.setFromCamera(ndc, camera);
+  raycaster.layers.enable(0);
+  const intersects = raycaster.intersectObjects(scene.children, true);
+
+  if (intersects.length === 0) {
+    return null;
+  }
+
+  const firstHit = intersects[0].object;
+  if (firstHit.name !== "pointer") {
+    return null;
+  }
+
+  return firstHit;
+}
+
+function moveCameraToPointer(pointerObject) {
+  moving = true;
+  const hitPos = pointerObject.parent.parent.parent.position;
+
+  gsap.to(camera.position, {
+    duration: 5,
+    x: hitPos.x,
+    y: hitPos.y + 0.5,
+    z: hitPos.z,
+    onComplete: () => {
+      moving = false;
+    },
+    ease: "power1.inOut",
+  });
+}
+
+function screenToNdc(clientX, clientY) {
+  return new THREE.Vector2(
+    (clientX / window.innerWidth) * 2 - 1,
+    -(clientY / window.innerHeight) * 2 + 1
+  );
+}
+
+function setupTouchControls() {
+  const canvas = renderer.domElement;
+
+  canvas.addEventListener(
+    "touchstart",
+    (event) => {
+      if (!touchLookEnabled || loadedAmount < 100 || event.touches.length !== 1) {
+        return;
+      }
+
+      const touch = event.touches[0];
+      touchStartX = touch.clientX;
+      touchStartY = touch.clientY;
+      lastTouchX = touch.clientX;
+      lastTouchY = touch.clientY;
+      touchDragging = false;
+      interactionDown = true;
+      event.preventDefault();
+    },
+    { passive: false }
+  );
+
+  canvas.addEventListener(
+    "touchmove",
+    (event) => {
+      if (!touchLookEnabled || loadedAmount < 100 || event.touches.length !== 1) {
+        return;
+      }
+
+      const touch = event.touches[0];
+      const dragDistance = Math.hypot(
+        touch.clientX - touchStartX,
+        touch.clientY - touchStartY
+      );
+
+      if (dragDistance > tapThresholdPx) {
+        touchDragging = true;
+      }
+
+      const dx = touch.clientX - lastTouchX;
+      const dy = touch.clientY - lastTouchY;
+
+      yaw -= dx * touchLookSensitivity;
+      pitch -= dy * touchLookSensitivity;
+      pitch = THREE.MathUtils.clamp(pitch, -maxPitch, maxPitch);
+
+      lastTouchX = touch.clientX;
+      lastTouchY = touch.clientY;
+      event.preventDefault();
+    },
+    { passive: false }
+  );
+
+  canvas.addEventListener(
+    "touchend",
+    (event) => {
+      if (!touchLookEnabled || loadedAmount < 100) {
+        return;
+      }
+
+      interactionDown = false;
+
+      if (!touchDragging && !moving && event.changedTouches.length > 0) {
+        const touch = event.changedTouches[0];
+        const ndc = screenToNdc(touch.clientX, touch.clientY);
+        const pointerHit = getPointerAtNdc(ndc);
+
+        if (pointerHit) {
+          moveCameraToPointer(pointerHit);
+        }
+      }
+
+      event.preventDefault();
+    },
+    { passive: false }
+  );
+}
+
+function applyTouchLook() {
+  const quaternion = new THREE.Quaternion();
+  const euler = new THREE.Euler(pitch, yaw, 0, "YXZ");
+
+  quaternion.setFromEuler(euler);
+  camera.quaternion.copy(quaternion);
+}
+
+function onWindowResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
 
 }
 
